@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from utility.default_tokenizer import DefaultTokenizer
 from utility.tiktoken_tokenizer import TiktokenTokenizer
 
 # hyperparameters
@@ -17,11 +16,11 @@ eval_iters = 200
 
 torch.manual_seed(42)
 
-with open('input1.txt', 'r', encoding='utf-8') as f:
+with open('input2.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
-tokenizer = DefaultTokenizer(chars)
+tokenizer = TiktokenTokenizer()
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits
@@ -57,15 +56,16 @@ def estimate_loss():
 # super simple bigram model
 class BigramLanguageModel(nn.Module):
 
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size, embedding_dim=256):
         super().__init__()
-        # each token directly reads off the logits for the next token from a lookup table
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        # Input -> Projection -> output
+        self.token_embedding_table = nn.Embedding(vocab_size, embedding_dim)
+        self.output_layer = nn.Linear(embedding_dim, vocab_size)
 
     def forward(self, idx, targets=None):
-
-        # idx and targets are both (B,T) tensor of integers
-        logits = self.token_embedding_table(idx) # (B,T,C)
+        # idx is (B, T) tensor of token indices
+        embeddings = self.token_embedding_table(idx)  # (B, T, embedding_dim)
+        logits = self.output_layer(embeddings)  # (B, T, vocab_size)
 
         if targets is None:
             loss = None
