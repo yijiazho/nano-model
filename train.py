@@ -17,7 +17,7 @@ eval_iters = 200
 
 torch.manual_seed(42)
 
-with open('input1.txt', 'r', encoding='utf-8') as f:
+with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))

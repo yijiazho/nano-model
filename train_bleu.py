@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import nltk
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 
 from utility.tiktoken_tokenizer import TiktokenTokenizer
 
@@ -12,11 +14,13 @@ eval_interval = 300
 learning_rate = 1e-2
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
+max_new_tokens = 50  # For BLEU score evaluation
+bleu_subset_size = 10 # Batch numers to parallel evaluate BLEU
 # ------------
 
 torch.manual_seed(42)
 
-with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
+with open('input1.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
@@ -40,16 +44,35 @@ def get_batch(split):
     return x, y
 
 @torch.no_grad()
-def estimate_loss():
+def estimate_loss_and_bleu():
     out = {}
     model.eval()
+    smooth_func = SmoothingFunction().method1
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
+        bleu_scores = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
             logits, loss = model(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
+
+            predictions = model.generate(X[:, :1], max_new_tokens)  # Generate based on the first token in X
+
+            # Subset of BLEU calculation (reduce batch size to speed up BLEU calculation)
+            bleu_subset = min(bleu_subset_size, X.size(0))  # Limit BLEU calculation to a subset
+            references = [[Y[i].cpu().tolist()] for i in range(bleu_subset)]
+            hypotheses = [predictions[i].cpu().tolist() for i in range(bleu_subset)]
+            
+            # Calculate BLEU for the subset of sequences in the batch
+            if hypotheses and references:
+                bleu_scores[k] = corpus_bleu(references, hypotheses, smoothing_function=smooth_func)
+                print(f"evaluation {k} times")
+
+        print('output......')
+        out[split] = {
+            'loss': losses.mean(),
+            'bleu': bleu_scores.mean(),
+        }
     model.train()
     return out
 
@@ -102,8 +125,10 @@ for iter in range(max_iters):
 
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0:
-        losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        results = estimate_loss_and_bleu()
+        train_loss, train_bleu = results['train']['loss'], results['train']['bleu']
+        val_loss, val_bleu = results['val']['loss'], results['val']['bleu']
+        print(f"step {iter}: train loss {train_loss:.4f}, val loss {val_loss:.4f}, train BLEU {train_bleu:.4f}, val BLEU {val_bleu:.4f}")
 
     # sample a batch of data
     xb, yb = get_batch('train')
