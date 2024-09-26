@@ -20,7 +20,7 @@ bleu_subset_size = 10 # Batch numers to parallel evaluate BLEU
 
 torch.manual_seed(42)
 
-with open('input1.txt', 'r', encoding='utf-8') as f:
+with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
@@ -66,9 +66,7 @@ def estimate_loss_and_bleu():
             # Calculate BLEU for the subset of sequences in the batch
             if hypotheses and references:
                 bleu_scores[k] = corpus_bleu(references, hypotheses, smoothing_function=smooth_func)
-                print(f"evaluation {k} times")
 
-        print('output......')
         out[split] = {
             'loss': losses.mean(),
             'bleu': bleu_scores.mean(),

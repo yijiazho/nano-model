@@ -4,6 +4,8 @@ from torch.nn import functional as F
 
 from utility.tiktoken_tokenizer import TiktokenTokenizer
 
+from nltk.translate.bleu_score import sentence_bleu
+
 # hyperparameters
 batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 8 # what is the maximum context length for predictions?
@@ -15,6 +17,7 @@ eval_iters = 200
 # ------------
 
 torch.manual_seed(42)
+path = 'modedl/model_tokenizer.pth'
 
 with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
@@ -93,6 +96,11 @@ class BigramLanguageModel(nn.Module):
         return idx
 
 model = BigramLanguageModel(vocab_size)
+
+# ----------------------------------
+# Train
+
+model.load_state_dict(torch.load(path))
 m = model.to(device)
 
 # create a PyTorch optimizer
@@ -117,3 +125,52 @@ for iter in range(max_iters):
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(tokenizer.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+
+torch.save(model.state_dict(), path)
+
+# -----------------------------------
+# Evaluation
+# Load
+model.load_state_dict(torch.load(path))
+model.to(device)
+model.eval()
+
+# Get a batch of validation data (X, Y), where X is the context and Y is the target
+def get_val_batch():
+    ix = torch.randint(len(val_data) - block_size, (1,))
+    x = torch.stack([val_data[i:i+block_size] for i in ix])
+    y = torch.stack([val_data[i+1:i+block_size+1] for i in ix])
+    x, y = x.to(device), y.to(device)
+    return x, y
+
+num_iterations = 100  # You can adjust this number based on how many samples you want to evaluate
+total_bleu_score = 0
+
+for _ in range(num_iterations):
+    # Fetch a single example from the validation set
+    context, reference_sequence = get_val_batch()
+
+    # Limit the number of tokens generated to match reference size (i.e., block_size)
+    generated_sequence = model.generate(context, max_new_tokens=block_size - 1)[0].tolist()
+
+    # Decode the generated sequence and the reference sequence
+    generated_text = tokenizer.decode(generated_sequence)
+    reference_text = tokenizer.decode(reference_sequence[0].tolist())  # Decode first reference in batch
+
+    # Tokenize both the generated text and the reference text for BLEU score calculation
+    generated_tokenized = tokenizer.encode(generated_text)
+    reference_tokenized = tokenizer.encode(reference_text)
+
+    # BLEU score requires a list of reference tokenized sequences
+    reference = [reference_tokenized]  # Reference should be a list of lists
+    candidate = generated_tokenized  # Candidate is the generated tokenized sequence
+
+    # Calculate BLEU score for this sample
+    bleu_score = sentence_bleu(reference, candidate)
+    
+    # Accumulate BLEU score
+    total_bleu_score += bleu_score
+
+# Calculate the average BLEU score over all iterations
+average_bleu_score = total_bleu_score / num_iterations
+print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
