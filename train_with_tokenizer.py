@@ -17,9 +17,9 @@ eval_iters = 200
 # ------------
 
 torch.manual_seed(42)
-path = 'modedl/model_tokenizer.pth'
+path = 'model/model_tokenizer.pth'
 
-with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
+with open('input/tale_of_two_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))

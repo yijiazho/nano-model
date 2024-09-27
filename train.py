@@ -18,7 +18,7 @@ eval_iters = 200
 
 torch.manual_seed(42)
 path = 'model/model.pth'
-with open('input/tale_of_twin_cities.txt', 'r', encoding='utf-8') as f:
+with open('input/tale_of_two_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
@@ -97,31 +97,31 @@ model = BigramLanguageModel(vocab_size)
 
 # ----------------------------------
 # Train
-# model.load_state_dict(torch.load(path))
-# m = model.to(device)
+model.load_state_dict(torch.load(path))
+m = model.to(device)
 
-# # create a PyTorch optimizer
-# optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+# create a PyTorch optimizer
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-# for iter in range(max_iters):
+for iter in range(max_iters):
 
-#     # every once in a while evaluate the loss on train and val sets
-#     if iter % eval_interval == 0:
-#         losses = estimate_loss()
-#         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    # every once in a while evaluate the loss on train and val sets
+    if iter % eval_interval == 0:
+        losses = estimate_loss()
+        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
-#     # sample a batch of data
-#     xb, yb = get_batch('train')
+    # sample a batch of data
+    xb, yb = get_batch('train')
 
-#     # evaluate the loss
-#     logits, loss = model(xb, yb)
-#     optimizer.zero_grad(set_to_none=True)
-#     loss.backward()
-#     optimizer.step()
+    # evaluate the loss
+    logits, loss = model(xb, yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
 
-# # generate from the model
-# context = torch.zeros((1, 1), dtype=torch.long, device=device)
-# print(tokenizer.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+# generate from the model
+context = torch.zeros((1, 1), dtype=torch.long, device=device)
+print(tokenizer.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
 
 torch.save(model.state_dict(), path)
 
