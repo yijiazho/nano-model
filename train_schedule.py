@@ -217,52 +217,39 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=
 
 
 # Training loop
-for iter in range(max_iters):
+def train():
+    for iter in range(max_iters):
 
-    # Evaluate loss on train and validation set every eval_interval steps
-    if iter % eval_interval == 0 or iter == max_iters - 1:
-        losses = estimate_loss()
-        val_loss = losses['val']
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {val_loss:.4f}")
+        # Evaluate loss on train and validation set every eval_interval steps
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = estimate_loss()
+            val_loss = losses['val']
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {val_loss:.4f}")
 
-        # Scheduler step: reduce LR if validation loss hasn't improved for 'scheduler patience'
-        scheduler.step(val_loss)
+            # Scheduler step: reduce LR if validation loss hasn't improved for 'scheduler patience'
+            scheduler.step(val_loss)
 
-        # Early stopping logic
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            num_bad_epochs = 0  # Reset counter if validation loss improves
-            torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model
-        else:
-            num_bad_epochs += 1
+            # Early stopping logic
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                num_bad_epochs = 0  # Reset counter if validation loss improves
+                torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model
+            else:
+                num_bad_epochs += 1
 
-        # Check if we should stop early
-        if num_bad_epochs >= early_stopping_patience:
-            print(f"Early stopping at step {iter}, no improvement in validation loss for {early_stopping_patience} intervals.")
-            break  # Stop training
+            # Check if we should stop early
+            if num_bad_epochs >= early_stopping_patience:
+                print(f"Early stopping at step {iter}, no improvement in validation loss for {early_stopping_patience} intervals.")
+                break  # Stop training
 
-    # Sample a batch of data and perform training
-    xb, yb = get_batch('train')
-    logits, loss = model(xb, yb)
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-    optimizer.step()
+        # Sample a batch of data and perform training
+        xb, yb = get_batch('train')
+        logits, loss = model(xb, yb)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+    torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model
 
-# If early stopping was triggered, load the best model before continuing to further evaluation or inference
-model.load_state_dict(torch.load('model/best_model.pth'))
-
-# generate from the model
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
-
-torch.save(model.state_dict(), path)
-
-# -----------------------------------
-# Evaluation
-# Load
-model.load_state_dict(torch.load(path))
-model.to(device)
-model.eval()
 
 # Get a batch of validation data (X, Y), where X is the context and Y is the target
 def get_val_batch():
@@ -274,32 +261,44 @@ def get_val_batch():
 
 num_iterations = 100  # You can adjust this number based on how many samples you want to evaluate
 total_bleu_score = 0
+def eval_bleu():
+    for _ in range(num_iterations):
+        # Fetch a single example from the validation set
+        context, reference_sequence = get_val_batch()
 
-for _ in range(num_iterations):
-    # Fetch a single example from the validation set
-    context, reference_sequence = get_val_batch()
+        # Limit the number of tokens generated to match reference size (i.e., block_size)
+        generated_sequence = model.generate(context, max_new_tokens=block_size - 1)[0].tolist()
 
-    # Limit the number of tokens generated to match reference size (i.e., block_size)
-    generated_sequence = model.generate(context, max_new_tokens=block_size - 1)[0].tolist()
+        # Decode the generated sequence and the reference sequence
+        generated_text = tokenizer.decode(generated_sequence)
+        reference_text = tokenizer.decode(reference_sequence[0].tolist())  # Decode first reference in batch
 
-    # Decode the generated sequence and the reference sequence
-    generated_text = tokenizer.decode(generated_sequence)
-    reference_text = tokenizer.decode(reference_sequence[0].tolist())  # Decode first reference in batch
+        # Tokenize both the generated text and the reference text for BLEU score calculation
+        generated_tokenized = tokenizer.encode(generated_text)
+        reference_tokenized = tokenizer.encode(reference_text)
 
-    # Tokenize both the generated text and the reference text for BLEU score calculation
-    generated_tokenized = tokenizer.encode(generated_text)
-    reference_tokenized = tokenizer.encode(reference_text)
+        # BLEU score requires a list of reference tokenized sequences
+        reference = [reference_tokenized]  # Reference should be a list of lists
+        candidate = generated_tokenized  # Candidate is the generated tokenized sequence
 
-    # BLEU score requires a list of reference tokenized sequences
-    reference = [reference_tokenized]  # Reference should be a list of lists
-    candidate = generated_tokenized  # Candidate is the generated tokenized sequence
+        # Calculate BLEU score for this sample
+        bleu_score = sentence_bleu(reference, candidate)
+        
+        # Accumulate BLEU score
+        total_bleu_score += bleu_score
 
-    # Calculate BLEU score for this sample
-    bleu_score = sentence_bleu(reference, candidate)
+    # Calculate the average BLEU score over all iterations
+    average_bleu_score = total_bleu_score / num_iterations
+    print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
     
-    # Accumulate BLEU score
-    total_bleu_score += bleu_score
+    
+train()
+eval_bleu()
+# If early stopping was triggered, load the best model before continuing to further evaluation or inference
+model.load_state_dict(torch.load('model/best_model.pth'))
 
-# Calculate the average BLEU score over all iterations
-average_bleu_score = total_bleu_score / num_iterations
-print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
+# generate from the model
+context = torch.zeros((1, 1), dtype=torch.long, device=device)
+print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
+
+torch.save(model.state_dict(), path)
