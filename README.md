@@ -4,29 +4,44 @@ This is a mini version of GPT model, building generative transformer model based
 
 The project is inspired by [nonoGPT](https://github.com/karpathy/nanoGPT/tree/master) by @karpathy
 
+The latest version is train_sschedule.py
+
 ## Structure
 
 ```
 nano-model
+├── demo
+├── gpt2.py
 ├── input
+|  ├── david_copperfield.txt
+|  ├── great_expectations.txt
+|  ├── les_miserables.txt
+|  ├── oliver_twist.txt
 |  ├── romance_of_three_kindoms.txt
-|  └── tale_of_twin_cities.txt
-├── model.pth
-├── model_dropout.pth
-├── model_tokenizer.pth
+|  ├── tale_of_two_cities.txt
+|  ├── the_count_of_monte_cristo.txt
+|  ├── the_three_musketeers.txt
+|  └── war_and_peace.txt
+├── model
+|  ├── best_model.pth
+|  ├── best_model_val_loss.txt
+|  ├── model.pth
+|  ├── model_dropout.pth
+|  └── model_tokenizer.pth
 ├── README.md
 ├── requirements.txt
 ├── train.py
 ├── train_bleu.py
+├── train_multiple_files.py
+├── train_schedule.py
 ├── train_with_dropout.py
 ├── train_with_tokenizer.py
 ├── utility
 |  ├── default_tokenizer.py
+|  ├── gpt2_tokenizer.py
 |  ├── tiktoken_tokenizer.py
 |  ├── tokenizer.py
 |  ├── __init__.py
-|  └── __pycache__
-├── v2.py
 ```
 
 ## Commands

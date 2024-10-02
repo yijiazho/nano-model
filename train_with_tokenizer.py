@@ -23,7 +23,7 @@ with open('input/tale_of_two_cities.txt', 'r', encoding='utf-8') as f:
     text = f.read()
 
 chars = sorted(list(set(text)))
-tokenizer = TiktokenTokenizer()
+tokenizer = TiktokenTokenizer(model="gpt-2")
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits

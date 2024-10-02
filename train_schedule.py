@@ -23,13 +23,14 @@ weight_decay = 1e-4
 # Hyperparameters for early stopping and learning rate scheduler
 scheduler_patience = 5
 early_stopping_patience = 10
-best_val_loss = float('inf')  # Initialize best loss as infinity
-num_bad_epochs = 0  # Tracks the number of epochs without improvement
+best_val_loss = float('inf')
+num_bad_epochs = 0
 
 # ------------
 
 torch.manual_seed(42)
-path = 'model/model_schedule.pth'
+loss_file_path = 'losses.txt'
+model_path = 'model/best_model.pth'
 input_paths = [
     'input/tale_of_two_cities.txt',
     'input/david_copperfield.txt',
@@ -41,13 +42,14 @@ input_paths = [
 ]
 
 combined_text = ""
+combined_loss=[]
 
 # Loop through each file and read its content, concatenating it to the combined_text
 for file_path in input_paths:
     with open(file_path, 'r', encoding='utf-8') as f:
         combined_text += f.read() + "\n"
 
-tokenizer = TiktokenTokenizer()
+tokenizer = TiktokenTokenizer(model="gpt-2")
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits
@@ -208,7 +210,7 @@ model = BigramLanguageModel(vocab_size)
 # ----------------------------------
 # Train
 
-# model.load_state_dict(torch.load(path))
+# model.load_state_dict(torch.load(model_path))
 m = model.to(device)
 
 # create a PyTorch optimizer and shceduler
@@ -218,37 +220,40 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=
 
 # Training loop
 def train():
-    for iter in range(max_iters):
+    with open(loss_file_path, 'a') as f:
+        for iter in range(max_iters):
+            # Evaluate loss on train and validation set every eval_interval steps
+            if iter % eval_interval == 0 or iter == max_iters - 1:
+                losses = estimate_loss()
+                val_loss = losses['val']
+                combined_loss.append(val_loss)
+                print(f"step {iter}: train loss {losses['train']:.4f}, val loss {val_loss:.4f}")
+                f.write(f"Val Loss: {val_loss:.4f}\n")
 
-        # Evaluate loss on train and validation set every eval_interval steps
-        if iter % eval_interval == 0 or iter == max_iters - 1:
-            losses = estimate_loss()
-            val_loss = losses['val']
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {val_loss:.4f}")
 
-            # Scheduler step: reduce LR if validation loss hasn't improved for 'scheduler patience'
-            scheduler.step(val_loss)
+                # Scheduler step: reduce LR if validation loss hasn't improved for 'scheduler patience'
+                scheduler.step(val_loss)
 
-            # Early stopping logic
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                num_bad_epochs = 0  # Reset counter if validation loss improves
-                torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model
-            else:
-                num_bad_epochs += 1
+                # Early stopping
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    num_bad_epochs = 0
+                    torch.save(model.state_dict(), model_path)
+                else:
+                    num_bad_epochs += 1
 
-            # Check if we should stop early
-            if num_bad_epochs >= early_stopping_patience:
-                print(f"Early stopping at step {iter}, no improvement in validation loss for {early_stopping_patience} intervals.")
-                break  # Stop training
-
-        # Sample a batch of data and perform training
-        xb, yb = get_batch('train')
-        logits, loss = model(xb, yb)
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        optimizer.step()
-    torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model
+                # Check if we should stop early
+                if num_bad_epochs >= early_stopping_patience:
+                    print(f"Early stopping at step {iter}, no improvement in validation loss for {early_stopping_patience} intervals.")
+                    break
+                
+            # Sample a batch of data and perform training
+            xb, yb = get_batch('train')
+            logits, loss = model(xb, yb)
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+        torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model after loop
 
 
 # Get a batch of validation data (X, Y), where X is the context and Y is the target
@@ -291,8 +296,9 @@ def eval_bleu():
     average_bleu_score = total_bleu_score / num_iterations
     print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
     
-    
+model.train()   
 train()
+model.eval()
 eval_bleu()
 # If early stopping was triggered, load the best model before continuing to further evaluation or inference
 model.load_state_dict(torch.load('model/best_model.pth'))
@@ -301,4 +307,4 @@ model.load_state_dict(torch.load('model/best_model.pth'))
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
 
-torch.save(model.state_dict(), path)
+torch.save(model.state_dict(), model_path)
