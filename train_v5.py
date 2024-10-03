@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from utility.tiktoken_tokenizer import TiktokenTokenizer
-
 from nltk.translate.bleu_score import sentence_bleu
+
+from utility.tiktoken_tokenizer import TiktokenTokenizer
 
 # hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel
@@ -23,33 +23,31 @@ weight_decay = 1e-4
 # Hyperparameters for early stopping and learning rate scheduler
 scheduler_patience = 5
 early_stopping_patience = 10
-best_val_loss = float('inf')
-num_bad_epochs = 0
-
-# ------------
+best_val_loss = float('inf')  # Initialize best loss as infinity
+num_bad_epochs = 0  # Tracks the number of epochs without improvement
 
 torch.manual_seed(42)
-loss_file_path = 'losses.txt'
-model_path = 'model/best_model.pth'
+path = '/content/drive/My Drive/model/models/model_schedule.pth'
+model_path = '/content/drive/My Drive/model/models/best_model.pth'
+loss_file_path = '/content/drive/My Drive/model/results/best_model_combined_losses.csv'
 input_paths = [
-    'input/tale_of_two_cities.txt',
-    'input/david_copperfield.txt',
-    'input/great_expectations.txt',
-    'input/war_and_peace.txt',
-    'input/les_miserables.txt',
-    'input/the_three_musketeers.txt',
-    'input/the_count_of_monte_cristo.txt'
+    '/content/drive/My Drive/model/input/tale_of_two_cities.txt',
+    '/content/drive/My Drive/model/input/david_copperfield.txt',
+    '/content/drive/My Drive/model/input/great_expectations.txt',
+    '/content/drive/My Drive/model/input/war_and_peace.txt',
+    '/content/drive/My Drive/model/input/les_miserables.txt',
+    '/content/drive/My Drive/model/input/the_three_musketeers.txt',
+    '/content/drive/My Drive/model/input/the_count_of_monte_cristo.txt'
 ]
 
 combined_text = ""
-combined_loss=[]
-
+combined_loss = []
 # Loop through each file and read its content, concatenating it to the combined_text
 for file_path in input_paths:
     with open(file_path, 'r', encoding='utf-8') as f:
         combined_text += f.read() + "\n"
 
-tokenizer = TiktokenTokenizer(model="gpt-2")
+tokenizer = TiktokenTokenizer("gpt-2")
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits
@@ -57,6 +55,7 @@ data = torch.tensor(tokenizer.encode(combined_text), dtype=torch.long)
 n = int(0.9*len(data)) # first 90% will be train, rest val
 train_data = data[:n]
 val_data = data[n:]
+
 
 # data loading
 def get_batch(split):
@@ -153,8 +152,8 @@ class Block(nn.Module):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
-    
-    
+
+
 # not that simple model
 class BigramLanguageModel(nn.Module):
 
@@ -205,13 +204,11 @@ class BigramLanguageModel(nn.Module):
             # append sampled index to the running sequence
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
-
+    
 model = BigramLanguageModel(vocab_size)
-# ----------------------------------
-# Train
+# model.load_state_dict(torch.load(path))
 
-# model.load_state_dict(torch.load(model_path))
-m = model.to(device)
+model = model.to(device)
 
 # create a PyTorch optimizer and shceduler
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -220,6 +217,8 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=
 
 # Training loop
 def train():
+    global best_val_loss
+    global num_bad_epochs
     with open(loss_file_path, 'a') as f:
         for iter in range(max_iters):
             # Evaluate loss on train and validation set every eval_interval steps
@@ -246,15 +245,14 @@ def train():
                 if num_bad_epochs >= early_stopping_patience:
                     print(f"Early stopping at step {iter}, no improvement in validation loss for {early_stopping_patience} intervals.")
                     break
-                
+
             # Sample a batch of data and perform training
             xb, yb = get_batch('train')
             logits, loss = model(xb, yb)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-        torch.save(model.state_dict(), 'model/best_model.pth')  # Save the best model after loop
-
+        torch.save(model.state_dict(), model_path)  # Save the best model after loop
 
 # Get a batch of validation data (X, Y), where X is the context and Y is the target
 def get_val_batch():
@@ -265,8 +263,9 @@ def get_val_batch():
     return x, y
 
 num_iterations = 100  # You can adjust this number based on how many samples you want to evaluate
-total_bleu_score = 0
 def eval_bleu():
+    global num_iterations
+    total_bleu_score = 0
     for _ in range(num_iterations):
         # Fetch a single example from the validation set
         context, reference_sequence = get_val_batch()
@@ -288,23 +287,22 @@ def eval_bleu():
 
         # Calculate BLEU score for this sample
         bleu_score = sentence_bleu(reference, candidate)
-        
+
         # Accumulate BLEU score
         total_bleu_score += bleu_score
 
     # Calculate the average BLEU score over all iterations
     average_bleu_score = total_bleu_score / num_iterations
     print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
-    
-model.train()   
+
+# Train the model and print loss, BLEU and output
+# model.load_state_dict(torch.load(model_path))
+model.train()
 train()
 model.eval()
 eval_bleu()
 # If early stopping was triggered, load the best model before continuing to further evaluation or inference
-model.load_state_dict(torch.load('model/best_model.pth'))
+model.load_state_dict(torch.load(model_path))
 
-# generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
-
-torch.save(model.state_dict(), model_path)
+print(tokenizer.decode(model.generate(context, max_new_tokens=200)[0].tolist()))

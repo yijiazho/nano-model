@@ -5,13 +5,13 @@ from torch.nn import functional as F
 from utility.tiktoken_tokenizer import TiktokenTokenizer
 
 from nltk.translate.bleu_score import sentence_bleu
-
+# Multiple files
 # hyperparameters
-batch_size = 32 # how many independent sequences will we process in parallel?
-block_size = 8 # what is the maximum context length for predictions?
+batch_size = 32 # how many independent sequences will we process in parallel
+block_size = 8 # what is the maximum context length for predictions
 max_iters = 2000
 eval_interval = 200
-learning_rate = 1e-3
+learning_rate = 5e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 embedding_dim = 192
@@ -23,16 +23,25 @@ weight_decay = 1e-4
 
 torch.manual_seed(42)
 path = 'model/model_dropout.pth'
+input_paths = [
+    'input/tale_of_two_cities.txt',
+    'input/david_copperfield.txt',
+    'input/great_expectations.txt',
+    'input/oliver_twist.txt'
+]
 
-with open('input/tale_of_two_cities.txt', 'r', encoding='utf-8') as f:
-    text = f.read()
+combined_text = ""
 
-chars = sorted(list(set(text)))
+# Loop through each file and read its content, concatenating it to the combined_text
+for file_path in input_paths:
+    with open(file_path, 'r', encoding='utf-8') as f:
+        combined_text += f.read() + "\n"
+
 tokenizer = TiktokenTokenizer()
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits
-data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
+data = torch.tensor(tokenizer.encode(combined_text), dtype=torch.long)
 n = int(0.9*len(data)) # first 90% will be train, rest val
 train_data = data[:n]
 val_data = data[n:]
@@ -263,4 +272,3 @@ for _ in range(num_iterations):
 # Calculate the average BLEU score over all iterations
 average_bleu_score = total_bleu_score / num_iterations
 print(f"Average BLEU score over {num_iterations} samples: {average_bleu_score}")
-# 0.4073

@@ -5,7 +5,7 @@ import nltk
 from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
 
 from utility.tiktoken_tokenizer import TiktokenTokenizer
-
+# BLEU
 # hyperparameters
 batch_size = 32 # how many independent sequences will we process in parallel?
 block_size = 8 # what is the maximum context length for predictions?

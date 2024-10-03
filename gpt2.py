@@ -5,13 +5,11 @@ import torch.nn.functional as F
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW
 from nltk.translate.bleu_score import sentence_bleu
 
-from utility.tiktoken_tokenizer import TiktokenTokenizer
-
 batch_size = 64
-epochs = 3
-sample_size = 500000
+epochs = 10
+block_size = 1024
+sample_size = 10240
 eval_interval = 1000
-block_size = 8
 num_iterations = 100
 total_bleu_score = 0
 total_loss = 0
@@ -19,7 +17,7 @@ total_loss = 0
 # Load pre-trained GPT-2 model and tokenizer
 model_name = 'gpt2'
 model = GPT2LMHeadModel.from_pretrained(model_name)
-tokenizer = TiktokenTokenizer(model="gpt-2")
+tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
 # Move model to GPU if available
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -48,60 +46,71 @@ for file_path in input_paths:
         
 
 # Train and test splits
-data = torch.tensor(tokenizer.encode(combined_text), dtype=torch.long)
-random_indices = random.sample(range(len(data)), sample_size)
-sampled_data = data[random_indices]
+tokenized_data = tokenizer.encode(combined_text, return_tensors='pt')[0]
+
+# Select a subset of the tokenized data
+sample_size = min(sample_size, len(tokenized_data)) 
+sampled_data = tokenized_data[:sample_size]
+
 n = int(0.9 * len(sampled_data))
 train_data = sampled_data[:n]
 val_data = sampled_data[n:]
 
-def write_losses_to_file(losses, file_path="combined_loss.csv"):
+def write_losses_to_file(losses, file_path=loss_file_path):
     with open(file_path, 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(losses)
+
+def chunk_data(data, block_size=1024):
+    for i in range(0, len(data) - block_size + 1, block_size):
+        yield data[i: i + block_size]
         
-def get_data_chunks(data, chunk_size=100000):
-    for i in range(0, len(data), chunk_size):
-        yield data[i:i+chunk_size]
-        
+train_data_chunks = list(chunk_data(train_data, block_size))
+
 # Fine Tuning GPT2
 optimizer = AdamW(model.parameters(), lr=5e-5)
 
+print(len(sampled_data))
+
 for epoch in range(epochs):
-    for step in range(0, len(train_data), batch_size):
-        inputs = train_data[step: step + batch_size]
+    epoch_loss = []
+    random.shuffle(train_data_chunks) 
+    for step in range(0, len(train_data_chunks), batch_size):
+        batch_chunks = train_data_chunks[step: step + batch_size]
+        inputs = torch.stack(batch_chunks).to(device)
         labels = inputs.clone()
 
         # Forward pass
-        outputs = model(inputs.to(device), labels=labels.to(device))
+        outputs = model(inputs, labels=labels)
         loss = outputs.loss
-
+        epoch_loss.append(loss.item())
+        
         # Backpropagation and optimization
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
-        print(f"Epoch {epoch}, Step {step}, Loss: {loss.item()}")
+        # Print loss every few steps
+        if step % eval_interval == 0:
+            print(f"Epoch {epoch}, Step {step}, Loss: {loss.item()}")
+    
+    write_losses_to_file(epoch_loss)
+    print(f"Epoch {epoch} finished with average loss: {sum(epoch_loss) / len(epoch_loss)}")
+
 
 # Function to generate text using GPT-2
 def generate_text(prompt, max_new_tokens=100):
-    # Encode the prompt (tokenize)
     input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)
+
+    output_ids = model.generate(
+        input_ids,
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        temperature=0.7,
+        pad_token_id=tokenizer.eos_token_id
+    )
     
-    # Generate text
-    with torch.no_grad():
-        output = model.generate(
-            input_ids,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=tokenizer.eos_token_id,
-            do_sample=True,
-            top_k=50,
-            top_p=0.95,
-            temperature=1.0
-        )
-    
-    # Decode generated output to text
-    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
     return generated_text
 
 # Get a batch of validation data (X, Y), where X is the context and Y is the target
@@ -113,6 +122,9 @@ def get_val_batch():
     return x, y
 
 loss_fn = torch.nn.CrossEntropyLoss()
+
+# generate from gpt2
+print(generate_text(""))
 
 model.eval()
 for _ in range(num_iterations):
