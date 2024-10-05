@@ -41,13 +41,16 @@ which is inspired by the transfomer model of GPT2
 
 ![GPT2](plot/GPT.png)
 
+It's using the same self attention mechanism as GPT2
+
+![Self Attention](plot/SelfAttention.png)
 ## Validation
 
 The loss converges at about 4.33
 ![Loss](plot/loss.png)
 
 
-The BLEU score is about 
+The BLEU score is about 0.4629, compared to 0.4652 for GPT2
 
 ## Commands
 To start the virtual environment, run `venv\Scripts\activate` in Command Prompt in windows
