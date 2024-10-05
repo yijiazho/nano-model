@@ -1,14 +1,13 @@
 import csv
-import random
 import torch
 import torch.nn.functional as F
+from torch.amp import GradScaler, autocast
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW
 from nltk.translate.bleu_score import sentence_bleu
 
-batch_size = 64
+batch_size = 16
 epochs = 10
-block_size = 1024
-sample_size = 10240
+block_size = 16
 eval_interval = 1000
 num_iterations = 100
 total_bleu_score = 0
@@ -28,75 +27,51 @@ model.train()
 torch.manual_seed(42)
 loss_file_path = 'results/combined_losses.csv'
 path = 'model/gpt2.pth'
-input_paths = [
-    'input/tale_of_two_cities.txt',
-    'input/david_copperfield.txt',
-    'input/great_expectations.txt',
-    'input/war_and_peace.txt',
-    'input/les_miserables.txt',
-    'input/the_three_musketeers.txt',
-    'input/the_count_of_monte_cristo.txt'
-]
-
-combined_text = ""
-combined_loss = []
-for file_path in input_paths:
-    with open(file_path, 'r', encoding='utf-8') as f:
-        combined_text += f.read() + "\n"
+input_path = 'input/tale_of_two_cities.txt'
+    
+with open(input_path, 'r', encoding='utf-8') as f:
+    text = f.read()
         
 
-# Train and test splits
-tokenized_data = tokenizer.encode(combined_text, return_tensors='pt')[0]
+tokenizer.model_max_length = len(text)
+model.config.pad_token_id = tokenizer.eos_token_id
 
-# Select a subset of the tokenized data
-sample_size = min(sample_size, len(tokenized_data)) 
-sampled_data = tokenized_data[:sample_size]
-
-n = int(0.9 * len(sampled_data))
-train_data = sampled_data[:n]
-val_data = sampled_data[n:]
+data = torch.tensor(tokenizer.encode(text), dtype=torch.long)
+n = int(0.9*len(data))
+train_data = data[:n]
+val_data = data[n:]
 
 def write_losses_to_file(losses, file_path=loss_file_path):
     with open(file_path, 'a', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(losses)
 
-def chunk_data(data, block_size=1024):
-    for i in range(0, len(data) - block_size + 1, block_size):
-        yield data[i: i + block_size]
         
-train_data_chunks = list(chunk_data(train_data, block_size))
-
 # Fine Tuning GPT2
 optimizer = AdamW(model.parameters(), lr=5e-5)
 
-print(len(sampled_data))
 
 for epoch in range(epochs):
     epoch_loss = []
-    random.shuffle(train_data_chunks) 
-    for step in range(0, len(train_data_chunks), batch_size):
-        batch_chunks = train_data_chunks[step: step + batch_size]
-        inputs = torch.stack(batch_chunks).to(device)
-        labels = inputs.clone()
+    total_loss = 0
 
-        # Forward pass
-        outputs = model(inputs, labels=labels)
+    # Move training data to device
+    inputs = train_data.to(device)
+    
+    for i in range(0, len(train_data), batch_size):
+        batch = inputs[i:i + batch_size]
+        outputs = model(batch, labels=batch)
         loss = outputs.loss
-        epoch_loss.append(loss.item())
-        
-        # Backpropagation and optimization
         loss.backward()
+        
+        # Optimize
         optimizer.step()
         optimizer.zero_grad()
+        total_loss += loss.item()
 
-        # Print loss every few steps
-        if step % eval_interval == 0:
-            print(f"Epoch {epoch}, Step {step}, Loss: {loss.item()}")
-    
-    write_losses_to_file(epoch_loss)
-    print(f"Epoch {epoch} finished with average loss: {sum(epoch_loss) / len(epoch_loss)}")
-
+    avg_epoch_loss = total_loss / (len(train_data) // batch_size)
+    print(f"Epoch {epoch + 1} average loss: {avg_epoch_loss:.4f}")
+    write_losses_to_file([avg_epoch_loss])
 
 # Function to generate text using GPT-2
 def generate_text(prompt, max_new_tokens=100):
@@ -124,9 +99,10 @@ def get_val_batch():
 loss_fn = torch.nn.CrossEntropyLoss()
 
 # generate from gpt2
-print(generate_text(""))
+print(generate_text("The strong tide, so swift, so deep, and certain,"))
 
 model.eval()
+total_loss = 0
 for _ in range(num_iterations):
     context, reference_sequence = get_val_batch()
 

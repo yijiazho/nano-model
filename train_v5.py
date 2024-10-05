@@ -27,17 +27,16 @@ best_val_loss = float('inf')  # Initialize best loss as infinity
 num_bad_epochs = 0  # Tracks the number of epochs without improvement
 
 torch.manual_seed(42)
-path = '/content/drive/My Drive/model/models/model_schedule.pth'
-model_path = '/content/drive/My Drive/model/models/best_model.pth'
-loss_file_path = '/content/drive/My Drive/model/results/best_model_combined_losses.csv'
+model_path = 'models/best_model.pth'
+loss_file_path = 'results/best_model_combined_losses.csv'
 input_paths = [
-    '/content/drive/My Drive/model/input/tale_of_two_cities.txt',
-    '/content/drive/My Drive/model/input/david_copperfield.txt',
-    '/content/drive/My Drive/model/input/great_expectations.txt',
-    '/content/drive/My Drive/model/input/war_and_peace.txt',
-    '/content/drive/My Drive/model/input/les_miserables.txt',
-    '/content/drive/My Drive/model/input/the_three_musketeers.txt',
-    '/content/drive/My Drive/model/input/the_count_of_monte_cristo.txt'
+    'input/tale_of_two_cities.txt',
+    'input/david_copperfield.txt',
+    'input/great_expectations.txt',
+    'input/war_and_peace.txt',
+    'input/les_miserables.txt',
+    'input/the_three_musketeers.txt',
+    'input/the_count_of_monte_cristo.txt'
 ]
 
 combined_text = ""
@@ -47,7 +46,7 @@ for file_path in input_paths:
     with open(file_path, 'r', encoding='utf-8') as f:
         combined_text += f.read() + "\n"
 
-tokenizer = TiktokenTokenizer("gpt-2")
+tokenizer = TiktokenTokenizer()
 vocab_size = tokenizer.vocab_size()
 
 # Train and test splits
@@ -206,7 +205,7 @@ class BigramLanguageModel(nn.Module):
         return idx
     
 model = BigramLanguageModel(vocab_size)
-# model.load_state_dict(torch.load(path))
+# model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 
 model = model.to(device)
 

@@ -4,45 +4,50 @@ This is a mini version of GPT model, building generative transformer model based
 
 The project is inspired by [nonoGPT](https://github.com/karpathy/nanoGPT/tree/master) by @karpathy
 
-The latest version is train_sschedule.py
+The latest version is train_v5.py
 
 ## Structure
 
 ```
 nano-model
-├── demo
 ├── gpt2.py
 ├── input
-|  ├── david_copperfield.txt
-|  ├── great_expectations.txt
-|  ├── les_miserables.txt
-|  ├── oliver_twist.txt
-|  ├── romance_of_three_kindoms.txt
-|  ├── tale_of_two_cities.txt
-|  ├── the_count_of_monte_cristo.txt
-|  ├── the_three_musketeers.txt
-|  └── war_and_peace.txt
 ├── model
-|  ├── best_model.pth
-|  ├── best_model_val_loss.txt
-|  ├── model.pth
-|  ├── model_dropout.pth
-|  └── model_tokenizer.pth
+├── plot
+|  ├── GPT.png
+|  └── myGPT.png
 ├── README.md
 ├── requirements.txt
-├── train.py
-├── train_bleu.py
-├── train_multiple_files.py
-├── train_schedule.py
-├── train_with_dropout.py
-├── train_with_tokenizer.py
+├── results
+├── train_v0.py
+├── train_v1.py
+├── train_v1_1.py
+├── train_v2.py
+├── train_v3.py
+├── train_v4.py
+├── train_v5.py
 ├── utility
 |  ├── default_tokenizer.py
 |  ├── gpt2_tokenizer.py
 |  ├── tiktoken_tokenizer.py
 |  ├── tokenizer.py
-|  ├── __init__.py
 ```
+
+The structure of the model is like 
+
+![nano-model](plot/myGPT.png) 
+
+which is inspired by the transfomer model of GPT2
+
+![GPT2](plot/GPT.png)
+
+## Validation
+
+The loss converges at about 4.33
+![Loss](plot/loss.png)
+
+
+The BLEU score is about 
 
 ## Commands
 To start the virtual environment, run `venv\Scripts\activate` in Command Prompt in windows
@@ -50,6 +55,8 @@ To start the virtual environment, run `venv\Scripts\activate` in Command Prompt 
 To generate dependencies, run `pip freeze > requirements.txt`
 
 To download dependencies, run `pip install -r requirements.txt`
+
+To run the training script, run `python train_v5.py`
 
 ## Reference
 
