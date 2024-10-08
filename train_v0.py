@@ -102,39 +102,39 @@ model = BigramLanguageModel(vocab_size)
 
 # ----------------------------------
 # Train
-model.load_state_dict(torch.load(path))
+# model.load_state_dict(torch.load(path))
 m = model.to(device)
 
 # create a PyTorch optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-# for iter in range(max_iters):
+for iter in range(max_iters):
 
-#     # every once in a while evaluate the loss on train and val sets
-#     if iter % eval_interval == 0:
-#         losses = estimate_loss()
-#         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+    # every once in a while evaluate the loss on train and val sets
+    if iter % eval_interval == 0:
+        losses = estimate_loss()
+        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
-#     # sample a batch of data
-#     xb, yb = get_batch('train')
+    # sample a batch of data
+    xb, yb = get_batch('train')
 
-#     # evaluate the loss
-#     logits, loss = model(xb, yb)
-#     optimizer.zero_grad(set_to_none=True)
-#     loss.backward()
-#     optimizer.step()
+    # evaluate the loss
+    logits, loss = model(xb, yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(tokenizer.decode(m.generate(context, max_new_tokens=500)[0].tolist()))
 
-torch.save(model.state_dict(), path)
+# torch.save(model.state_dict(), path)
 
 # -----------------------------------
 # Evaluation
 # Load
-model.load_state_dict(torch.load(path))
-model.to(device)
+# model.load_state_dict(torch.load(path))
+# model.to(device)
 model.eval()
 
 # Get a batch of validation data (X, Y), where X is the context and Y is the target
